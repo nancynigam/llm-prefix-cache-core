@@ -12,11 +12,12 @@ Each part has different caching characteristics:
 
 The PromptComposer:
 1. Accepts typed segments
-2. Canonicalizes each for stable tokenization
+2. Canonicalizes SYSTEM and TEMPLATE segments for stable tokenization
+   (USER segments are left as-is to preserve code, formatting, etc.)
 3. Tracks boundaries so we know where to cut for caching
 4. Produces a ComposedPrompt with all metadata needed for cache lookup
 
-Why this matters for TTFT:
+Why this matters for TTFT (Time to First Token):
 If we cache [System + Examples] KV, we skip their prefill computation.
 For a 2K token system prompt at ~50ms/1K tokens, that's ~100ms saved per request.
 """
@@ -67,7 +68,7 @@ class PromptComposer:
 
         Steps:
         1. Validate segment ordering (SYSTEM -> TEMPLATE -> USER)
-        2. Canonicalize each segment
+        2. Canonicalize system & template segment
         3. Join with separators
         4. Track character offsets for each segment
 
@@ -85,8 +86,12 @@ class PromptComposer:
         current_offset = 0
 
         for i, segment in enumerate(segments):
-            # Canonicalize the segment content
-            canonical_content = self.canonicalizer.canonicalize(segment.content)
+            # Only canonicalize cacheable segments (SYSTEM, TEMPLATE)
+            # USER content is left as-is to preserve code, formatting, etc.
+            if segment.segment_type in (SegmentType.SYSTEM, SegmentType.TEMPLATE):
+                content = self.canonicalizer.canonicalize(segment.content)
+            else:
+                content = segment.content
 
             # Add separator if not first segment
             if i > 0:
@@ -95,11 +100,11 @@ class PromptComposer:
 
             # Record boundary
             start = current_offset
-            end = start + len(canonical_content)
+            end = start + len(content)
             boundaries.append((start, end, segment.segment_type))
 
             # Add content
-            composed_parts.append(canonical_content)
+            composed_parts.append(content)
             current_offset = end
 
         full_text = ''.join(composed_parts)
