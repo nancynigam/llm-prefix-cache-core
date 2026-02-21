@@ -87,3 +87,89 @@ class Block:
             f"tokens={len(self.tokens)}, "
             f"ref_count={self.ref_count})"
         )
+
+
+class KVBlockStore:
+    """
+    Manages allocation of blocks for token sequences.
+
+    Responsibilities (for now):
+    - Split token sequences into fixed-size blocks
+    - Assign unique block IDs
+    - Track total memory usage
+
+    Example:
+        store = KVBlockStore(block_size=64)
+        blocks = store.allocate(tokens=[1, 2, 3, ... 150 tokens])
+        # Returns 3 blocks: [64 tokens], [64 tokens], [22 tokens]
+    """
+
+    def __init__(self, block_size: int = 64):
+        """
+        Args:
+            block_size: Number of tokens per block (default 64)
+        """
+        self.block_size = block_size
+        self._next_block_id = 0
+        self._blocks: dict[int, Block] = {}  # block_id -> Block
+
+    def allocate(self, tokens: list[int]) -> list[Block]:
+        """
+        Split tokens into blocks and return them.
+
+        Args:
+            tokens: List of token IDs to store
+
+        Returns:
+            List of Block objects containing the tokens
+        """
+        if not tokens:
+            return []
+
+        blocks = []
+
+        # Split tokens into chunks of block_size
+        for i in range(0, len(tokens), self.block_size):
+            chunk = tokens[i : i + self.block_size]
+
+            block = Block(
+                block_id=self._next_block_id,
+                tokens=chunk,
+            )
+
+            self._blocks[block.block_id] = block
+            self._next_block_id += 1
+            blocks.append(block)
+
+        return blocks
+
+    def get_block(self, block_id: int) -> Optional[Block]:
+        """Get a block by its ID."""
+        return self._blocks.get(block_id)
+
+    def free_block(self, block_id: int) -> bool:
+        """
+        Remove a block from the store.
+        Only succeeds if block exists and ref_count is 0.
+
+        Returns True if freed, False otherwise.
+        """
+        block = self._blocks.get(block_id)
+        if block is None:
+            return False
+
+        if not block.is_free:
+            return False
+
+        del self._blocks[block_id]
+        return True
+
+    @property
+    def num_blocks(self) -> int:
+        """Total number of blocks in store."""
+        return len(self._blocks)
+
+    @property
+    def total_memory_bytes(self) -> int:
+        """Total memory used by all blocks."""
+        return sum(block.size_bytes for block in self._blocks.values())
