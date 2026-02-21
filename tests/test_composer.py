@@ -212,7 +212,7 @@ class TestPromptComposer:
         assert "User" not in result.cacheable_prefix
 
     def test_canonicalization_applied(self):
-        """Composer should canonicalize segment content."""
+        """Composer should canonicalize SYSTEM/TEMPLATE content."""
         composer = PromptComposer()
 
         segments = [
@@ -223,6 +223,33 @@ class TestPromptComposer:
 
         # Should be canonicalized (stripped, spaces collapsed)
         assert result.text == "Hello world"
+
+    def test_user_content_not_canonicalized(self):
+        """USER content should NOT be canonicalized (preserves code, formatting)."""
+        composer = PromptComposer()
+
+        # Python code with meaningful whitespace
+        user_code = """def foo():
+    return 1"""
+
+        segments = [
+            Segment(SegmentType.SYSTEM, "You are a coding assistant."),
+            Segment(SegmentType.USER, user_code),
+        ]
+
+        result = composer.compose(segments)
+
+        # USER content should be preserved exactly
+        assert user_code in result.text
+
+        # Extra spaces in USER should also be preserved
+        segments2 = [
+            Segment(SegmentType.SYSTEM, "System"),
+            Segment(SegmentType.USER, "hello    world"),  # Extra spaces
+        ]
+
+        result2 = composer.compose(segments2)
+        assert "hello    world" in result2.text  # Spaces preserved
 
     def test_segment_boundaries_correct(self):
         """Segment boundaries should have correct offsets."""
