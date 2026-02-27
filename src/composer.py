@@ -159,7 +159,7 @@ class PromptComposer:
         - prefix text: The actual cacheable content
         - segment metadata: Tools, policies, etc.
 
-        Interview note: This is the cache key. It must be:
+        Note: This is the cache key. It must be:
         1. Deterministic (same inputs -> same hash)
         2. Collision-resistant (different inputs -> different hash)
         3. Include all factors that affect KV cache validity
